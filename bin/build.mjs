@@ -27,7 +27,7 @@ const category = (e) => {
 const partyNames = () => {
   const prefs = readFileSync(`${BOT}/config/preferences.md`, "utf8");
   const m = prefs.match(/Default \d+ seats?: ([^.\n]+)/);
-  return m ? m[1].split(",").map((s) => s.trim()) : ["Mitchell Rusitzky"];
+  return m ? m[1].split(",").map((s) => s.trim()) : ["Mitchell"];
 };
 
 function payload() {
