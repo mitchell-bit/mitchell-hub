@@ -48,7 +48,7 @@ function payload() {
     return date ? `${name}, ${new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : name;
   };
   for (const n of state.needsMitchell || []) {
-    const [kind, ...rest] = n.reason.split(":");
+    const [kind, ...rest] = String(n.reason || "needs you").split(":");
     const site = String(n.key).split(":")[0];
     needs.push({ kind: "bot", title: humanKey(n.key), detail: `${kind.replace(/-/g, " ")}: ${rest.join(":").trim()}`, key: n.key, url: n.url || (site === "advancescreenings" ? "https://www.advancescreenings.com/city/us/ny/new_york" : undefined) });
   }
@@ -62,10 +62,10 @@ function payload() {
         seen.add(p);
         needs.push({ kind: "bot", title: p.split(":")[0].replace(/-/g, " "), detail: p.split(":").slice(1).join(":") });
       }
-  const setup = existsSync(`${ROOT}data/needs.json`) ? JSON.parse(readFileSync(`${ROOT}data/needs.json`, "utf8")) : [];
+  const setup = existsSync(`${BOT}/config/hub-needs.json`) ? JSON.parse(readFileSync(`${BOT}/config/hub-needs.json`, "utf8")) : [];
   needs.push(...setup.map((s) => ({ kind: "setup", ...s })));
 
-  const discover = existsSync(`${ROOT}data/discover.json`) ? JSON.parse(readFileSync(`${ROOT}data/discover.json`, "utf8")) : { sources: [] };
+  const discover = existsSync(`${BOT}/config/discover.json`) ? JSON.parse(readFileSync(`${BOT}/config/discover.json`, "utf8")) : { sources: [] };
   const last = (state.runs || []).at(-1) || null;
   return { entries, needs, discover, attended: state.attended || [], lastRun: last, updatedAt: state.updated || new Date().toISOString() };
 }

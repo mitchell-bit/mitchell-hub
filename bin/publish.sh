@@ -8,5 +8,7 @@ git add data.enc
 if git diff --cached --name-only | grep -v -x 'data.enc' | grep -q .; then
   echo "publish: refusing, unexpected staged files"; exit 1
 fi
-git diff --cached --quiet && { echo "publish: nothing to push"; exit 0; }
-git commit -q -m "data: $(date '+%F %H:%M')" && git push -q origin main && echo "publish: pushed"
+git diff --cached --quiet || git commit -q -m "data: $(date '+%F %H:%M')"
+# Push whenever local is ahead, so a commit left behind by a failed push goes out next run.
+[ -n "$(git rev-list origin/main..HEAD 2>/dev/null)" ] || { echo "publish: nothing to push"; exit 0; }
+git push -q origin main && echo "publish: pushed"

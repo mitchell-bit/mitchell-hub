@@ -153,7 +153,7 @@ function discover(el) {
   const f = segState.discover;
   const list = src.filter((s) => s.category === f);
   $("#subtitle").textContent = src.length ? `${src.length} free NYC sources${DATA.discover.checkedAt ? `, checked ${fmt(DATA.discover.checkedAt, { month: "short", day: "numeric" })}` : ""}` : "";
-  const order = (s) => (s.autoEnterable && !s.needsAccount ? 0 : s.autoEnterable ? 1 : 2);
+  const order = (s) => (s.bot ? 0 : s.autoEnterable && !s.needsAccount ? 1 : s.autoEnterable ? 2 : 3);
   list.sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
   el.innerHTML = `${seg("discover", [["movies", "Movies"], ["tapings", "Tapings"], ["events", "Events"]])}
     ${list.length ? list.map((s) => {
