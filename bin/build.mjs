@@ -34,7 +34,7 @@ function payload() {
   const state = JSON.parse(readFileSync(`${BOT}/data/state.json`, "utf8"));
   const names = partyNames();
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-  const entries = state.entries.map((e) => {
+  const entries = state.entries.filter((e) => e.status !== "cancelled").map((e) => {
     // The bot sometimes writes "2026-11-23 or 2026-11-24" or "unknown": keep the first real date, the rest as an alternative.
     const dates = String(e.date || "").match(/\d{4}-\d{2}-\d{2}/g) || [];
     return {
