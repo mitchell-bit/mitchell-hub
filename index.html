@@ -33,13 +33,14 @@
 </main>
 
 <div id="app" hidden>
-  <header class="top">
-    <div class="top-row">
+  <div class="top-row">
       <span class="brand">Mitchell Hub</span>
+      <span class="mini-title" id="mini-title">Tickets</span>
       <button class="icon-btn" id="lock-btn" aria-label="Lock">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 1 1 6 0v3H9z"/></svg>
       </button>
     </div>
+  <header class="top">
     <h2 id="title" class="title">Tickets</h2>
     <p id="subtitle" class="muted small"></p>
   </header>
@@ -52,18 +53,9 @@
   </nav>
 </div>
 
-<div id="sheet" class="sheet" hidden>
-  <div class="sheet-backdrop" data-close></div>
-  <div class="sheet-panel" role="dialog" aria-modal="true">
-    <div class="sheet-grab" data-close></div>
-    <button class="sheet-x" data-close aria-label="Close">Done</button>
-    <div id="sheet-body"></div>
-  </div>
-</div>
-<div id="viewer" class="viewer" hidden>
-  <button id="viewer-x" class="viewer-x" aria-label="Close">Done</button>
-  <div id="viewer-body" class="viewer-body"></div>
-</div>
+<div id="layers"></div>
+<div class="ptr" id="ptr"><div class="spinner"></div></div>
+<div class="toast" id="toast" role="status"></div>
 <script src="app.js"></script>
 </body>
 </html>

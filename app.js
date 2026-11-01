@@ -57,25 +57,34 @@ const relDay = (d) => {
   const n = daysUntil(d);
   return n === 0 ? "Today" : n === 1 ? "Tomorrow" : n > 1 && n < 7 ? fmt(d, { weekday: "long" }) : "";
 };
-const timeOf = (e) => (e.checkIn || "").replace(/\s*(ET|EST|EDT)\b.*$/i, "").replace(/\s*show$/i, "").trim();
+// Contest titles read "Win Tickets To See X (sweepstakes)"; show just X.
+const cleanName = (n) => String(n || "").replace(/^win (advance(d)? )?(screening )?(passes|tickets)( and [^\s]+)? to (see )?/i, "").replace(/\s*\((?:[^)]*sweepstakes[^)]*)\)\s*$/i, "").trim() || n;
+const timeOf = (e) => /unknown|tba/i.test(e.checkIn || "") ? "" : (e.checkIn || "").replace(/\s*(ET|EST|EDT)\b.*$/i, "").replace(/\s*show$/i, "").trim();
 const CAT = { movies: "Movie", tapings: "Taping", events: "Event" };
 const SITE = { "1iota": "1iota", iheart: "iHeartRadio", wb: "Warner Bros", wbtickets: "Warner Bros", gofobo: "Gofobo", lionsgate: "Lionsgate", searchlight: "Searchlight", "last-week-tonight": "Last Week Tonight" };
 const siteName = (s) => SITE[s] || s;
-const shortVenue = (v) => (v || "").split(",")[0];
+const shortVenue = (v) => (/^unknown/i.test(v || "") ? "" : (v || "").split(",")[0]);
 
 /* ---------- views ---------- */
 const views = { tickets, entries, discover, needs };
 const TITLES = { tickets: "Tickets", entries: "Entries", discover: "Discover", needs: "Needs you" };
 let segState = { entries: "all", discover: "movies" };
 
+let currentTab = null;
 function route() {
   const tab = (location.hash.slice(1) || "tickets").split("/")[0];
   const name = views[tab] ? tab : "tickets";
-  document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.tab === name));
-  $("#title").textContent = TITLES[name];
-  $("#view").innerHTML = "";
-  views[name]($("#view"));
-  window.scrollTo(0, 0);
+  const render = () => {
+    document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.tab === name));
+    $("#title").textContent = $("#mini-title").textContent = TITLES[name];
+    const v = $("#view");
+    v.innerHTML = "";
+    v.style.animation = "none"; void v.offsetWidth; v.style.animation = "";
+    views[name](v);
+    if (currentTab !== name) { window.scrollTo(0, 0); document.body.classList.remove("scrolled"); }
+    currentTab = name;
+  };
+  render();
 }
 
 function passCard(e, i) {
@@ -84,7 +93,7 @@ function passCard(e, i) {
   return `<button class="pass cat-${esc(e.category)}" data-key="${esc(e.key)}" data-i="${i}">
     <div class="pass-top">
       <div><div class="pass-kicker">${esc(CAT[e.category] || "Event")} · ${esc(siteName(e.site))}${soon ? `<span class="soon">${esc(soon)}</span>` : ""}</div>
-      <div class="pass-name">${esc(e.event)}</div></div>
+      <div class="pass-name">${esc(cleanName(e.event))}</div></div>
       <div class="pass-date"><span>${esc(fmt(e.date, { weekday: "short" }))}</span><b>${esc(fmt(e.date, { month: "short", day: "numeric" }))}</b></div>
     </div>
     <div class="pass-fields">
@@ -117,7 +126,7 @@ function tickets(el) {
 function row(e) {
   return `<button class="row" data-key="${esc(e.key)}">
     <div class="datebox">${e.date ? `<span>${esc(fmt(e.date, { month: "short" }))}</span><b>${esc(fmt(e.date, { day: "numeric" }))}</b><i>${esc(fmt(e.date, { weekday: "short" }))}</i>` : `<span>Date</span><b class="tba">TBA</b>`}</div>
-    <div class="row-main"><b>${esc(e.event)}</b><span>${esc([timeOf(e), shortVenue(e.venue), siteName(e.site)].filter(Boolean).join(" · "))}</span></div>
+    <div class="row-main"><b>${esc(cleanName(e.event))}</b><span>${esc([timeOf(e), shortVenue(e.venue), siteName(e.site)].filter(Boolean).join(" · "))}</span></div>
     <span class="pill ${esc(e.status.split("-")[0])}">${esc(statusLabel(e.status))}</span>
   </button>`;
 }
@@ -191,19 +200,65 @@ function lastRunText() {
   return `Bot last checked ${when}${r.checked && r.checked.length ? ` · ${r.checked.length} site${r.checked.length === 1 ? "" : "s"}` : ""}`;
 }
 
-/* ---------- sheets ---------- */
+/* ---------- layers: stacked popups ---------- */
+// Every popup is its own layer on top of the page (a bottom sheet or a centered card), so a QR code opens over the
+// ticket instead of replacing it. Back gesture, Esc, tapping outside, or swiping down closes the top layer only.
+const X_SVG = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+const stack = [];
+function present(html, { card = false } = {}) {
+  const layer = document.createElement("div");
+  layer.className = `layer${card ? " card" : ""}`;
+  layer.innerHTML = `<div class="layer-bg"></div><div class="layer-panel" role="dialog" aria-modal="true"><div class="layer-grab"></div><button class="layer-x" aria-label="Close">${X_SVG}</button><div class="layer-body">${html}</div></div>`;
+  $("#layers").appendChild(layer);
+  stack.push(layer);
+  document.body.style.overflow = "hidden";
+  history.pushState({ layer: stack.length }, "");
+  requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add("in")));
+  layer.querySelector(".layer-bg").addEventListener("click", () => history.back());
+  layer.querySelector(".layer-x").addEventListener("click", () => history.back());
+  dragToClose(layer);
+  return layer.querySelector(".layer-body");
+}
+function dismissTop() {
+  const layer = stack.pop();
+  if (!layer) return;
+  layer.classList.remove("in");
+  setTimeout(() => layer.remove(), 380);
+  if (!stack.length) document.body.style.overflow = "";
+}
+function dismissAll() { while (stack.length) dismissTop(); }
+window.addEventListener("popstate", (ev) => {
+  const depth = (ev.state && ev.state.layer) || 0;
+  while (stack.length > depth) dismissTop();
+});
+function dragToClose(layer) {
+  const panel = layer.querySelector(".layer-panel");
+  let y0 = null, dy = 0;
+  panel.addEventListener("touchstart", (e) => { if (panel.scrollTop <= 0) { y0 = e.touches[0].clientY; dy = 0; } }, { passive: true });
+  panel.addEventListener("touchmove", (e) => {
+    if (y0 === null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy <= 0) { panel.style.transform = ""; layer.classList.remove("dragging"); return; }
+    layer.classList.add("dragging");
+    panel.style.transform = `translateY(${dy}px)`;
+  }, { passive: true });
+  panel.addEventListener("touchend", () => {
+    if (y0 === null) return;
+    y0 = null;
+    layer.classList.remove("dragging");
+    panel.style.transform = "";
+    if (dy > 110) history.back();
+  });
+}
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 1800);
+}
 function bindOpen(el) {
   el.querySelectorAll("[data-key]").forEach((b) => b.addEventListener("click", () => openEntry(b.dataset.key)));
 }
-function openSheet(html) {
-  $("#sheet-body").innerHTML = html;
-  $("#sheet").hidden = false;
-  document.body.style.overflow = "hidden";
-}
-function closeSheet() {
-  $("#sheet").hidden = true;
-  document.body.style.overflow = "";
-}
+const openSheet = (html) => present(html);
 
 function openEntry(key) {
   const e = DATA.entries.find((x) => x.key === key);
@@ -212,7 +267,7 @@ function openEntry(key) {
   const u = safeUrl(e.ticketUrl || e.url);
   openSheet(`<div class="detail-list">
     <span class="pill ${esc(e.status.split("-")[0])}">${esc(statusLabel(e.status))}</span>
-    <h3>${esc(e.event)}</h3>
+    <h3>${esc(cleanName(e.event))}</h3>
     <div class="kv"><span>Date</span><b>${esc(fmt(e.date, { weekday: "long", month: "long", day: "numeric" }))}${e.dateAlt ? ` or ${esc(fmt(e.dateAlt, { month: "short", day: "numeric" }))}` : ""}</b></div>
     ${e.checkIn ? `<div class="kv"><span>Check-in</span><b>${esc(e.checkIn)}</b></div>` : ""}
     ${e.venue ? `<div class="kv"><span>Venue</span><b>${esc(e.venue)}</b></div>` : ""}
@@ -224,15 +279,27 @@ function openEntry(key) {
   </div>`);
 }
 
+const ICON = {
+  qr: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>`,
+  ticket: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 6v12" stroke-dasharray="2 2"/></svg>`,
+  pdf: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>`,
+  cal: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>`,
+  map: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>`,
+  link: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>`,
+  chev: `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>`,
+};
+
 function openTicket(e) {
   const t = timeOf(e);
   const a = e.assets || {};
+  const hasPages = a.pages && a.pages.length;
   const ticketUrl = safeUrl(e.ticketUrl || e.url);
   const venue = e.venue && !/tba|not disclosed|^new york(,| city)/i.test(e.venue) ? e.venue : "";
-  openSheet(`<div class="ticket">
+  const noCode = e.emailId || /list|name/i.test(e.instructions || "") ? "Your name is on the list. Bring photo ID." : "The ticket is saved automatically after the bot's next run.";
+  const body = present(`<div class="ticket">
     <div class="ticket-head cat-${esc(e.category)}">
       <div class="pass-kicker">${esc(CAT[e.category])} · ${esc(siteName(e.site))}${relDay(e.date) ? `<span class="soon">${esc(relDay(e.date))}</span>` : ""}</div>
-      <div class="pass-name">${esc(e.event)}</div>
+      <div class="pass-name">${esc(cleanName(e.event))}</div>
       <div class="ticket-when">
         <div class="field"><span>Date</span><b>${esc(fmt(e.date, { weekday: "short", month: "short", day: "numeric" }))}</b></div>
         <div class="field"><span>Check-in</span><b>${esc(t || "TBA")}</b></div>
@@ -247,22 +314,29 @@ function openTicket(e) {
       </div>
       <div class="guests"><ul>${(e.guests || []).map((g, i) => `<li>${esc(g)}<span>${i === 0 ? "Holder" : `Guest ${i}`}</span></li>`).join("")}</ul></div>
       ${e.instructions ? `<div class="ticket-note">${esc(e.instructions)}</div>` : ""}
+      ${a.qr ? `<div class="stub"><button class="stub-qr" id="stub-qr" aria-label="Enlarge QR code"><div class="spinner"></div></button><div class="stub-text"><b>Tap to scan</b>Show this at check-in. It opens big and bright.</div></div>` : `<div class="stub"><div class="stub-text"><b>No code to scan</b>${esc(noCode)}</div></div>`}
       ${e.note ? `<details class="ticket-note"><summary>Bot notes</summary>${esc(e.note)}</details>` : ""}
     </div>
   </div>
-  <div class="actions">
-    ${a.ticket ? `<button class="btn primary" id="show-ticket">Show Ticket</button>` : ""}
-    ${a.qr ? `<button class="btn primary" id="show-qr">Show QR Code</button>` : ""}
-    ${a.pages && a.pages.length ? `<button class="btn" id="show-full">Show Full PDF</button>` : ""}
-    ${!a.ticket && !a.qr ? `<div class="info">${e.emailId || /list|name/i.test(e.instructions || "") ? "No scannable ticket: your name is on the list. Bring photo ID." : "Ticket not saved yet. It's captured automatically after the bot's next run."}</div>` : ""}
-    ${ticketUrl ? `<a class="btn" href="${esc(ticketUrl)}" target="_blank" rel="noopener noreferrer">Open on ${esc(siteName(e.site))}</a>` : ""}
-    <button class="btn" id="ics">Add to Calendar</button>
-    ${venue ? `<a class="btn" href="https://maps.apple.com/?q=${encodeURIComponent(venue)}" target="_blank" rel="noopener noreferrer">Directions</a>` : ""}
+  <div class="tiles">
+    <button class="tile" id="t-qr" ${a.qr ? "" : "disabled"}>${ICON.qr}QR Code</button>
+    <button class="tile" id="t-ticket" ${a.ticket ? "" : "disabled"}>${ICON.ticket}Ticket</button>
+    <button class="tile" id="t-pdf" ${hasPages ? "" : "disabled"}>${ICON.pdf}Full PDF</button>
+  </div>
+  <div class="ilist">
+    ${ticketUrl ? `<a href="${esc(ticketUrl)}" target="_blank" rel="noopener noreferrer">${ICON.link}Open on ${esc(siteName(e.site))}${ICON.chev}</a>` : ""}
+    <button id="ics">${ICON.cal}Add to Calendar${ICON.chev}</button>
+    ${venue ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(venue)}" target="_blank" rel="noopener noreferrer">${ICON.map}Directions${ICON.chev}</a>` : ""}
   </div>`);
-  $("#ics").addEventListener("click", () => downloadIcs(e));
-  if (a.ticket) $("#show-ticket").addEventListener("click", () => viewer([a.ticket], "Ticket"));
-  if (a.qr) $("#show-qr").addEventListener("click", () => viewer([a.qr], "QR", true));
-  if (a.pages && a.pages.length) $("#show-full").addEventListener("click", () => viewer(a.pages, "Full ticket", false, a.pdf));
+  $("#ics", body).addEventListener("click", () => { downloadIcs(e); toast("Calendar event ready"); });
+  if (a.qr) {
+    assetUrl(a.qr).then((u) => { const b = $("#stub-qr", body); if (b) b.innerHTML = `<img src="${u}" alt="QR code">`; }).catch(() => {});
+    const openQr = () => showQr(e, a.qr);
+    $("#stub-qr", body).addEventListener("click", openQr);
+    $("#t-qr", body).addEventListener("click", openQr);
+  }
+  if (a.ticket) $("#t-ticket", body).addEventListener("click", () => showImages(e, [a.ticket], "Ticket"));
+  if (hasPages) $("#t-pdf", body).addEventListener("click", () => showImages(e, a.pages, "Full ticket", a.pdf));
 }
 
 /* ---------- ticket files ---------- */
@@ -275,19 +349,22 @@ async function assetUrl(asset) {
   const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: buf.slice(0, 12) }, KEY, buf.slice(12));
   return (blobs[asset.id] = URL.createObjectURL(new Blob([pt], { type: asset.type })));
 }
-async function viewer(assets, label, qr = false, pdf = null) {
-  const v = $("#viewer");
-  v.className = qr ? "viewer qr" : "viewer";
-  $("#viewer-body").innerHTML = `<p class="muted">Opening ${esc(label.toLowerCase())}…</p>`;
-  v.hidden = false;
+const popHead = (e, label) => `<div class="pop-title">${esc(label)}</div><p class="pop-sub">${esc(e.event)} · ${esc(fmt(e.date, { weekday: "short", month: "short", day: "numeric" }))}</p>`;
+async function showQr(e, qr) {
+  const body = present(`${popHead(e, "Scan at check-in")}<div class="pop-load"><div class="spinner"></div></div>`, { card: true });
+  try {
+    const u = await assetUrl(qr);
+    $(".pop-load", body).outerHTML = `<img class="pop-qr" src="${u}" alt="QR code"><p class="pop-hint">${esc((e.guests || [])[0] || "")} · Admit ${esc(e.party || 1)} · Turn your brightness up</p>`;
+  } catch { $(".pop-load", body).textContent = "Couldn't open the code. Check your connection."; }
+}
+async function showImages(e, assets, label, pdf = null) {
+  const body = present(`${popHead(e, label)}<div class="pop-load"><div class="spinner"></div></div>`, { card: true });
   try {
     const urls = await Promise.all(assets.map(assetUrl));
-    $("#viewer-body").innerHTML = urls.map((u, i) => `<img src="${u}" alt="${esc(label)}${urls.length > 1 ? ` page ${i + 1}` : ""}">`).join("") +
+    $(".pop-load", body).outerHTML = `<div class="pop-scroll">${urls.map((u, i) => `<img class="pop-img" src="${u}" alt="${esc(label)}${urls.length > 1 ? ` page ${i + 1}` : ""}">`).join("")}</div>` +
       (pdf ? `<button class="btn" id="open-pdf">Open original PDF</button>` : "");
-    if (pdf) $("#open-pdf").addEventListener("click", async () => window.open(await assetUrl(pdf), "_blank"));
-  } catch {
-    $("#viewer-body").innerHTML = `<p class="muted">Couldn't open it. Check your connection and try again.</p>`;
-  }
+    if (pdf) $("#open-pdf", body).addEventListener("click", async () => window.open(await assetUrl(pdf), "_blank"));
+  } catch { $(".pop-load", body).textContent = "Couldn't open it. Check your connection."; }
 }
 
 function parseTime(s) {
@@ -328,15 +405,34 @@ function bindTip(el) {
   if (b) b.addEventListener("click", () => { localStorage.setItem("tip-a2hs", "1"); b.parentElement.remove(); });
 }
 
+/* ---------- pull to refresh ---------- */
+function pullToRefresh() {
+  let y0 = null, pulled = false;
+  addEventListener("touchstart", (e) => { y0 = scrollY <= 0 && !stack.length && DATA ? e.touches[0].clientY : null; pulled = false; }, { passive: true });
+  addEventListener("touchmove", (e) => { if (y0 !== null && e.touches[0].clientY - y0 > 80) { pulled = true; $("#ptr").classList.add("show"); } }, { passive: true });
+  addEventListener("touchend", async () => {
+    if (!pulled) return;
+    y0 = null; pulled = false;
+    try {
+      const enc = await fetchEnc();
+      if (enc.salt === ENC.salt) { ENC = enc; DATA = await decrypt(KEY, enc); updateBadge(); route(); toast("Up to date"); }
+    } catch { toast("Couldn't refresh"); }
+    $("#ptr").classList.remove("show");
+  });
+}
+
 /* ---------- boot ---------- */
+function updateBadge() {
+  const n = (DATA.needs || []).length;
+  const badge = $("#needs-badge");
+  badge.hidden = !n;
+  badge.textContent = n;
+}
 function show(data) {
   DATA = data;
   $("#lock").hidden = true;
   $("#app").hidden = false;
-  const n = (data.needs || []).length;
-  const badge = $("#needs-badge");
-  badge.hidden = !n;
-  badge.textContent = n;
+  updateBadge();
   route();
 }
 
@@ -367,10 +463,11 @@ async function unlock(ev) {
 async function boot() {
   $("#lock-form").addEventListener("submit", unlock);
   $("#lock-btn").addEventListener("click", async () => { await clearKey(); DATA = null; $("#app").hidden = true; $("#lock").hidden = false; $("#view").innerHTML = ""; });
-  $("#sheet").addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeSheet(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if (!$("#viewer").hidden) $("#viewer").hidden = true; else closeSheet(); } });
-  $("#viewer-x").addEventListener("click", () => { $("#viewer").hidden = true; });
-  window.addEventListener("hashchange", () => { closeSheet(); if (DATA) route(); });
+
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && stack.length) history.back(); });
+  addEventListener("scroll", () => document.body.classList.toggle("scrolled", scrollY > 36), { passive: true });
+  pullToRefresh();
+  window.addEventListener("hashchange", () => { dismissAll(); if (DATA) route(); });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   try {
     const [cached, enc] = await Promise.all([loadKey(), fetchEnc()]);
