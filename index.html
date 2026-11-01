@@ -10,7 +10,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Hub">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Hub</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -59,6 +59,10 @@
     <button class="sheet-x" data-close aria-label="Close">Done</button>
     <div id="sheet-body"></div>
   </div>
+</div>
+<div id="viewer" class="viewer" hidden>
+  <button id="viewer-x" class="viewer-x" aria-label="Close">Done</button>
+  <div id="viewer-body" class="viewer-body"></div>
 </div>
 <script src="app.js"></script>
 </body>

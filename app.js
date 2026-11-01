@@ -9,6 +9,7 @@ const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? u : "");
 
 let DATA = null;
 let ENC = null;
+let KEY = null;
 
 /* ---------- crypto + key cache ---------- */
 async function deriveKey(pass, enc) {
@@ -47,9 +48,12 @@ async function fetchEnc() {
 /* ---------- dates ---------- */
 const TODAY = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 const asDate = (d) => new Date(`${d}T12:00:00`);
-const fmt = (d, o) => asDate(d).toLocaleDateString("en-US", o);
+// Undated entries (date null) render as TBA instead of "Invalid Date".
+const fmt = (d, o) => (d ? asDate(d).toLocaleDateString("en-US", o) : "TBA");
 const daysUntil = (d) => Math.round((asDate(d) - asDate(TODAY)) / 864e5);
+const byDate = (a, b) => (a.date || "9999").localeCompare(b.date || "9999");
 const relDay = (d) => {
+  if (!d) return "";
   const n = daysUntil(d);
   return n === 0 ? "Today" : n === 1 ? "Tomorrow" : n > 1 && n < 7 ? fmt(d, { weekday: "long" }) : "";
 };
@@ -93,8 +97,8 @@ function passCard(e, i) {
 
 function tickets(el) {
   const won = DATA.entries.filter((e) => e.status === "won");
-  const up = won.filter((e) => !e.past).sort((a, b) => a.date.localeCompare(b.date));
-  const past = won.filter((e) => e.past).sort((a, b) => b.date.localeCompare(a.date));
+  const up = won.filter((e) => !e.past).sort(byDate);
+  const past = won.filter((e) => e.past).sort((a, b) => byDate(b, a));
   $("#subtitle").textContent = up.length ? `${up.length} upcoming` : "No upcoming tickets";
   let html = installTip();
   if (!up.length) {
@@ -112,7 +116,7 @@ function tickets(el) {
 
 function row(e) {
   return `<button class="row" data-key="${esc(e.key)}">
-    <div class="datebox"><span>${esc(fmt(e.date, { month: "short" }))}</span><b>${esc(fmt(e.date, { day: "numeric" }))}</b><i>${esc(fmt(e.date, { weekday: "short" }))}</i></div>
+    <div class="datebox">${e.date ? `<span>${esc(fmt(e.date, { month: "short" }))}</span><b>${esc(fmt(e.date, { day: "numeric" }))}</b><i>${esc(fmt(e.date, { weekday: "short" }))}</i>` : `<span>Date</span><b class="tba">TBA</b>`}</div>
     <div class="row-main"><b>${esc(e.event)}</b><span>${esc([timeOf(e), shortVenue(e.venue), siteName(e.site)].filter(Boolean).join(" · "))}</span></div>
     <span class="pill ${esc(e.status.split("-")[0])}">${esc(statusLabel(e.status))}</span>
   </button>`;
@@ -133,8 +137,8 @@ function entries(el) {
   $("#subtitle").textContent = lastRunText();
   const f = segState.entries;
   const list = all.filter((e) => f === "all" || e.category === f);
-  const up = list.filter((e) => !e.past).sort((a, b) => a.date.localeCompare(b.date));
-  const past = list.filter((e) => e.past).sort((a, b) => b.date.localeCompare(a.date));
+  const up = list.filter((e) => !e.past).sort(byDate);
+  const past = list.filter((e) => e.past).sort((a, b) => byDate(b, a));
   el.innerHTML = `
     <div class="stats">
       <div class="stat"><b>${submitted.length}</b><span>Submitted</span></div>
@@ -209,7 +213,7 @@ function openEntry(key) {
   openSheet(`<div class="detail-list">
     <span class="pill ${esc(e.status.split("-")[0])}">${esc(statusLabel(e.status))}</span>
     <h3>${esc(e.event)}</h3>
-    <div class="kv"><span>Date</span><b>${esc(fmt(e.date, { weekday: "long", month: "long", day: "numeric" }))}</b></div>
+    <div class="kv"><span>Date</span><b>${esc(fmt(e.date, { weekday: "long", month: "long", day: "numeric" }))}${e.dateAlt ? ` or ${esc(fmt(e.dateAlt, { month: "short", day: "numeric" }))}` : ""}</b></div>
     ${e.checkIn ? `<div class="kv"><span>Check-in</span><b>${esc(e.checkIn)}</b></div>` : ""}
     ${e.venue ? `<div class="kv"><span>Venue</span><b>${esc(e.venue)}</b></div>` : ""}
     <div class="kv"><span>Party</span><b>${esc((e.guests || []).join(", ") || e.party)}</b></div>
@@ -220,10 +224,9 @@ function openEntry(key) {
   </div>`);
 }
 
-const WALLET_SVG = `<svg viewBox="0 0 30 22" aria-hidden="true"><rect x="1" y="1" width="28" height="20" rx="4" fill="#fff"/><rect x="1" y="3" width="28" height="5" fill="#ff3b30"/><rect x="1" y="7" width="28" height="5" fill="#ffcc00"/><rect x="1" y="11" width="28" height="5" fill="#34c759"/><path d="M1 14h9a5 5 0 0 0 10 0h9v3a4 4 0 0 1-4 4H5a4 4 0 0 1-4-4z" fill="#d1d1d6"/></svg>`;
-
 function openTicket(e) {
   const t = timeOf(e);
+  const a = e.assets || {};
   const ticketUrl = safeUrl(e.ticketUrl || e.url);
   const venue = e.venue && !/tba|not disclosed|^new york(,| city)/i.test(e.venue) ? e.venue : "";
   openSheet(`<div class="ticket">
@@ -248,23 +251,43 @@ function openTicket(e) {
     </div>
   </div>
   <div class="actions">
-    ${ticketUrl ? `<a class="btn primary" href="${esc(ticketUrl)}" target="_blank" rel="noopener noreferrer">View ticket on ${esc(siteName(e.site))}</a>` : ""}
-    <button class="wallet-btn" id="wallet">${WALLET_SVG}Add to Apple Wallet</button>
+    ${a.ticket ? `<button class="btn primary" id="show-ticket">Show Ticket</button>` : ""}
+    ${a.qr ? `<button class="btn primary" id="show-qr">Show QR Code</button>` : ""}
+    ${a.pages && a.pages.length ? `<button class="btn" id="show-full">Show Full PDF</button>` : ""}
+    ${!a.ticket && !a.qr ? `<div class="info">${e.emailId || /list|name/i.test(e.instructions || "") ? "No scannable ticket: your name is on the list. Bring photo ID." : "Ticket not saved yet. It's captured automatically after the bot's next run."}</div>` : ""}
+    ${ticketUrl ? `<a class="btn" href="${esc(ticketUrl)}" target="_blank" rel="noopener noreferrer">Open on ${esc(siteName(e.site))}</a>` : ""}
     <button class="btn" id="ics">Add to Calendar</button>
     ${venue ? `<a class="btn" href="https://maps.apple.com/?q=${encodeURIComponent(venue)}" target="_blank" rel="noopener noreferrer">Directions</a>` : ""}
   </div>`);
   $("#ics").addEventListener("click", () => downloadIcs(e));
-  $("#wallet").addEventListener("click", () => walletInfo(e));
+  if (a.ticket) $("#show-ticket").addEventListener("click", () => viewer([a.ticket], "Ticket"));
+  if (a.qr) $("#show-qr").addEventListener("click", () => viewer([a.qr], "QR", true));
+  if (a.pages && a.pages.length) $("#show-full").addEventListener("click", () => viewer(a.pages, "Full ticket", false, a.pdf));
 }
 
-function walletInfo(e) {
-  const pass = safeUrl(e.passUrl);
-  if (pass) { location.href = pass; return; }
-  openSheet(`<div class="detail-list"><h3>Apple Wallet</h3>
-    <div class="info"><b>Wallet passes need a one-time Apple setup.</b> Apple only accepts passes signed with a Pass Type certificate from an Apple Developer account ($99 a year). Once that certificate is added, every ticket here gets a real Wallet pass and this button adds it straight in.</div>
-    <div class="info">Until then: save this site to your Home Screen (Share, then Add to Home Screen). It opens straight to Tickets and works with no signal at the venue.</div>
-    <div class="actions"><button class="btn" id="back">Back to ticket</button></div></div>`);
-  $("#back").addEventListener("click", () => openTicket(e));
+/* ---------- ticket files ---------- */
+const blobs = {};
+async function assetUrl(asset) {
+  if (blobs[asset.id]) return blobs[asset.id];
+  const r = await fetch(`t/${asset.id}.enc`);
+  if (!r.ok) throw new Error("asset");
+  const buf = new Uint8Array(await r.arrayBuffer());
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: buf.slice(0, 12) }, KEY, buf.slice(12));
+  return (blobs[asset.id] = URL.createObjectURL(new Blob([pt], { type: asset.type })));
+}
+async function viewer(assets, label, qr = false, pdf = null) {
+  const v = $("#viewer");
+  v.className = qr ? "viewer qr" : "viewer";
+  $("#viewer-body").innerHTML = `<p class="muted">Opening ${esc(label.toLowerCase())}…</p>`;
+  v.hidden = false;
+  try {
+    const urls = await Promise.all(assets.map(assetUrl));
+    $("#viewer-body").innerHTML = urls.map((u, i) => `<img src="${u}" alt="${esc(label)}${urls.length > 1 ? ` page ${i + 1}` : ""}">`).join("") +
+      (pdf ? `<button class="btn" id="open-pdf">Open original PDF</button>` : "");
+    if (pdf) $("#open-pdf").addEventListener("click", async () => window.open(await assetUrl(pdf), "_blank"));
+  } catch {
+    $("#viewer-body").innerHTML = `<p class="muted">Couldn't open it. Check your connection and try again.</p>`;
+  }
 }
 
 function parseTime(s) {
@@ -327,6 +350,7 @@ async function unlock(ev) {
     ENC = ENC || await fetchEnc();
     const key = await deriveKey($("#pass").value, ENC);
     const data = await decrypt(key, ENC);
+    KEY = key;
     await saveKey(key, ENC.salt);
     $("#pass").value = "";
     show(data);
@@ -344,13 +368,14 @@ async function boot() {
   $("#lock-form").addEventListener("submit", unlock);
   $("#lock-btn").addEventListener("click", async () => { await clearKey(); DATA = null; $("#app").hidden = true; $("#lock").hidden = false; $("#view").innerHTML = ""; });
   $("#sheet").addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeSheet(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if (!$("#viewer").hidden) $("#viewer").hidden = true; else closeSheet(); } });
+  $("#viewer-x").addEventListener("click", () => { $("#viewer").hidden = true; });
   window.addEventListener("hashchange", () => { closeSheet(); if (DATA) route(); });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   try {
     const [cached, enc] = await Promise.all([loadKey(), fetchEnc()]);
     ENC = enc;
-    if (cached && cached.salt === enc.salt) return show(await decrypt(cached.key, enc));
+    if (cached && cached.salt === enc.salt) { const data = await decrypt(cached.key, enc); KEY = cached.key; return show(data); }
   } catch { /* fall through to the lock screen */ }
   $("#lock").hidden = false;
 }
