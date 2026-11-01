@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Add guest emails so invites confirm on their own",
+    "detail": "1iota and some studio forms ask for each guest's email when you win. The bot has your guests' names but not their emails, so it enters only the seats it can fill and you have to confirm guests by hand. Add their emails to nyc-screenings/config/private.md (it stays off GitHub) and every future invite can be locked in by the bot.",
+    "action": "Open 1iota requests",
+    "url": "https://1iota.com/profile/requests"
+  },
+  {
+    "title": "Turn on real Apple Wallet passes",
+    "detail": "Apple only accepts Wallet passes signed with a Pass Type ID certificate from an Apple Developer account ($99/yr). There isn't one on this Mac. Enroll (or use Shown's team if it has one), create a Pass Type ID, and the hub can sign a .pkpass for every ticket.",
+    "action": "Apple Developer enrollment",
+    "url": "https://developer.apple.com/programs/enroll/"
+  }
+]

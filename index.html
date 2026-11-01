@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hub">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Hub</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main id="lock" class="lock" hidden>
+  <div class="lock-card">
+    <img class="lock-icon" src="icons/icon-192.png" alt="">
+    <h1>Mitchell Hub</h1>
+    <p class="muted">Tickets, entries and free NYC things.</p>
+    <form id="lock-form" autocomplete="on">
+      <input type="text" name="username" autocomplete="username" value="mitchell" hidden>
+      <input id="pass" type="password" name="password" autocomplete="current-password" placeholder="Password" aria-label="Password" required>
+      <button type="submit" class="btn primary" id="unlock-btn">Unlock</button>
+      <p id="lock-err" class="lock-err" role="alert"></p>
+    </form>
+  </div>
+</main>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="top-row">
+      <span class="brand">Mitchell Hub</span>
+      <button class="icon-btn" id="lock-btn" aria-label="Lock">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 1 1 6 0v3H9z"/></svg>
+      </button>
+    </div>
+    <h2 id="title" class="title">Tickets</h2>
+    <p id="subtitle" class="muted small"></p>
+  </header>
+  <section id="view" class="view"></section>
+  <nav class="tabs" aria-label="Sections">
+    <a href="#tickets" data-tab="tickets"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V7z"/></svg><span>Tickets</span></a>
+    <a href="#entries" data-tab="entries"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v2H5zM5 9h14v2H5zM5 14h9v2H5zM5 19h9v2H5z"/></svg><span>Entries</span></a>
+    <a href="#discover" data-tab="discover"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm3.5 6.5-2 5-5 2 2-5 5-2z"/></svg><span>Discover</span></a>
+    <a href="#needs" data-tab="needs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 15a2 2 0 0 0 4 0z"/></svg><span>Needs you</span><b id="needs-badge" class="badge" hidden></b></a>
+  </nav>
+</div>
+
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-panel" role="dialog" aria-modal="true">
+    <div class="sheet-grab" data-close></div>
+    <button class="sheet-x" data-close aria-label="Close">Done</button>
+    <div id="sheet-body"></div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
